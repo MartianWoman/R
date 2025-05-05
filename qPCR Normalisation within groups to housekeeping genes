@@ -1,0 +1,58 @@
+#install.packages("readxl")
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("data.table")
+#install.packages("ggpubr")
+#install.packages("ggpattern")
+
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(data.table)
+library(ggpubr)
+library(ggpattern)
+
+# setwd("C:/Users/Mars/Desktop/***)
+
+meow <- read_excel("QPCR.xlsx")
+
+# Numeric
+meow <- meow %>%
+  mutate(value = as.numeric(gsub(",", ".", as.character(value))))
+
+# Average per group (gene × genotype × treatment)
+meow_avg <- meow %>%
+  group_by(genotype, treatment, gene) %>%
+  summarise(mean_expr = mean(value, na.rm = TRUE), .groups = "drop")
+# Avg actin separately
+actin_avg <- meow_avg %>%
+  filter(gene == "actin") %>%
+  rename(actin_mean = mean_expr) %>%
+  select(-gene)
+
+
+#_____ Normalisation (mean_expr / actin_mean)
+meow_rel <- meow_avg %>%
+  left_join(actin_avg, by = c("genotype", "treatment")) %>%
+  mutate(norm_to_actin = mean_expr / actin_mean)
+# Actin always 1 -> no need to plot
+meow_rel_plot <- meow_rel %>% filter(gene != "actin")
+
+# plot
+ggplot(meow_rel_plot, aes(x = gene, y = norm_to_actin, fill = gene)) +
+  geom_col(color = "black") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray30", linewidth = 0.7) +
+  facet_grid(genotype ~ treatment) +
+  labs(
+    x = "Gene",
+    y = "Normalized expression (mean / actin mean)",
+    title = "Relative gene expression normalized to actin"
+  ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
